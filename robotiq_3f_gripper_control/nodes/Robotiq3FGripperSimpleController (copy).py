@@ -160,12 +160,8 @@ def askForCommand(command):
     strAskForCommand += 'd: Decrease force\n'
 
     strAskForCommand += '-->'
-    cmd = input(strAskForCommand)
-    print("cmd = ")
-    print(cmd)
-    return cmd
-    
-    # return input(strAskForCommand)
+
+    return input(strAskForCommand)
 
 
 def publisher():
@@ -178,41 +174,11 @@ def publisher():
     command = Robotiq3FGripperRobotOutput();
 
     while not rospy.is_shutdown():
-        # command = Robotiq3FGripperRobotOutput();
-        # # command = genCommand(askForCommand(command), command)
-        command = genCommand('r', command)
+        command = genCommand(askForCommand(command), command)
 
         pub.publish(command)
+
         rospy.sleep(0.1)
-
-        input("continue...")
-        # command = Robotiq3FGripperRobotOutput();
-        command = genCommand('a', command)
-        pub.publish(command)
-        rospy.sleep(0.1)
-
-        input("continue...")
-        # command = Robotiq3FGripperRobotOutput();
-        command = genCommand('c', command)
-        pub.publish(command)
-        rospy.sleep(0.1)
-
-        # command = genCommand(askForCommand(command), command)
-
-        # pub.publish(command)
-
-        # rospy.sleep(0.1)
-
-    # command = Robotiq3FGripperRobotOutput();
-    # command.rACT = 1
-    # command.rGTO = 1
-    # command.rSPA = 255
-    # command.rFRA = 150
-
-    # pub.publish(command)
-
-    # rospy.sleep(0.1)
-    # input("wait...")
 
 
 if __name__ == '__main__':

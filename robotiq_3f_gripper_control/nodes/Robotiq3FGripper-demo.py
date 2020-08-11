@@ -37,11 +37,8 @@
 # Revision $Id$
 
 """@package docstring
-Command-line interface for sending simple commands to a ROS node controlling a 3F gripper gripper.
-
-This serves as an example for publishing messages on the 'Robotiq3FGripperRobotOutput' topic using the 'Robotiq3FGripper_robot_output' msg type for 
-sending commands to a 3F gripper gripper. In this example, only the simple control mode is implemented. For using the advanced control mode, 
-please refer to the Robotiq support website (support.robotiq.com).
+demo 3f robotiq gripper grips a cilinder bar, which is activated by fiber spot image intensity change,
+i.e., open or close based on spot intensity change
 """
 
 from __future__ import print_function
@@ -76,23 +73,21 @@ import os
 
 class gripperdemo:
 
-  tolerance = 100 #image pixel difference for the detected cirlce
+  
 
   def __init__(self):
-    # self.image_pub = rospy.Publisher("image_topic_2",Image)
-
-    # self.bridge = CvBridge()
-    # self.image_sub = rospy.Subscriber("image_raw",Image,self.callback)
+    
+    self.tolerance = 10000 #image pixel difference for the detected cirlce
     np.set_printoptions(suppress=True)
     print("program starts")
-    file = '2020-08-05-17_10_40 detected circle stats.csv'
+    file = '2020-08-10-10_56_19 detected circle stats.csv'
     filename = '/home/ubuntu20/catkin_ws/src/PerceptionVisulization/logs/' + file
     if not os.path.exists(filename):
       print("Program aborted! initialization file: %s does NOT exists!" % filename)
       sys.exit(0)
     data_load = np.loadtxt(filename,delimiter=",", skiprows=1)
 
-    self.historypixels = data_load[5]
+    self.historypixels = data_load[:,5]
     print("file name is ", file)
     print("is the initialization file correct? [Y/N]")
     if (input()=='Y'or'y'):
@@ -104,24 +99,32 @@ class gripperdemo:
       # self.pub = rospy.Publisher('fiber_index', IntList,queue_size=10)
       self.pub = rospy.Publisher('Robotiq3FGripperRobotOutput', Robotiq3FGripperRobotOutput)
 
-      command = Robotiq3FGripperRobotOutput();
-      cmd = 'r'
-      command = self.genCommand(cmd, command)  #reset gripper
-      self.pub.publish(command)
-      rospy.sleep(0.5)
-      input("press Enter to continue")
+      self.command = Robotiq3FGripperRobotOutput();
 
-      cmd = 'a'
-      command = self.genCommand(cmd, command)  #activate grepper
-      self.pub.publish(command)
-      rospy.sleep(1)
-      input("press Enter to continue")
+      self.command = self.genCommand('r', self.command)
 
-      cmd = 'o'
-      command = self.genCommand(cmd, command)  #open grepper
-      self.pub.publish(command)
+      self.pub.publish(self.command)
       rospy.sleep(0.1)
-      input("press Enter to continue")
+
+      input("press enter to continue...")
+      # command = Robotiq3FGripperRobotOutput();
+      self.command = self.genCommand('a', self.command)
+      self.pub.publish(self.command)
+      rospy.sleep(0.1)
+
+      input("press enter to continue...")
+      # command = Robotiq3FGripperRobotOutput();
+      self.command = self.genCommand('c', self.command)
+      self.pub.publish(self.command)
+      rospy.sleep(0.1)
+
+
+      input("press enter to continue...")
+      # command = Robotiq3FGripperRobotOutput();
+      self.command = self.genCommand('o', self.command)
+      self.pub.publish(self.command)
+      rospy.sleep(0.1)
+
 
       self.gripperstatus = 0 # rPRA in open status is 0
 
@@ -145,20 +148,25 @@ class gripperdemo:
     ####calculate the most pixelvalue changes
     maxchange, index = self.calculatepixelvalue(stats_load, cv_image)
 
-    if maxchange > tolerance:
+    if abs(maxchange) > self.tolerance:
+      # print("gripper is reacting...")
       self.gripperaction()
+      rospy.sleep(1)
     
 
-    
+    # genCommand
   def calculatepixelvalue(self, stats_load, img):
     row_num = stats_load.shape[0]
+    stats_load = np.array(stats_load)
     diff = []
     for i, stat in enumerate(stats_load):
+
       centerx = stat[3]
       centery = stat[2]
       radius = stat[4]
       x0 = int(centerx-radius)   ##opencv image has its x as column, y as row, orign at left top
       y0 = int(centery-radius)   ##here we use x0 as row in array, y0 as column in array
+
       diameter = int(2*radius)
       pixelvalue = 0
       count = 0 #number of cilcle pixel
@@ -166,30 +174,33 @@ class gripperdemo:
         for y in range(y0,y0+diameter+1):
           if math.sqrt((x-centerx)**2 + (y-centery)**2)<=radius:
             pixelvalue = pixelvalue+img[x,y]
-      diff_current = self.initialpixels[i]-pixelvalue
+      diff_current = self.historypixels[i]-pixelvalue
       diff.append(diff_current)
       # update history pixel value
       self.historypixels[i] = pixelvalue
 
     max_index = diff.index(max(diff))  #return fiber index
     max_value = max(diff)
+    print("max diff:", max_value)
 
     # print("fibers responsed are: %d and %d, intensity changes are: %d and %d"\
     #       %(max1_index+1, max2_index+1, max1_value, max2_value))
     return [max_value, max_index]
 
   def gripperaction(self):
-    command = Robotiq3FGripperRobotOutput();
-    command.rFRA = 10  #grip force [0-255]
-    command.rSPA = 255 #speed [0-255]
-    command.rMOD = 0 #normal mode
+    # command = Robotiq3FGripperRobotOutput();
+    self.command.rFRA = 10  #grip force [0-255]
+    self.command.rSPA = 255 #speed [0-255]
+    self.command.rMOD = 0 #normal mode
     # get gripper status
     if self.gripperstatus == 0: #fully open
-      command.rPRA = 150  #position of the gripper [0-255], 0 for fully open, 255 for fully closed
+      self.command.rPRA = 150  #position of the gripper [0-255], 0 for fully open, 255 for fully closed
+      self.gripperstatus = 1
     else: #grasping object
-      command.rPRA = 0
+      self.command.rPRA = 0
+      self.gripperstatus = 0
 
-    self.pub.publish(command)
+    self.pub.publish(self.command)
 
     rospy.sleep(0.1) 
 
@@ -325,9 +336,6 @@ def publisher():
         rospy.sleep(0.1)
 
 
-# if __name__ == '__main__':
-#     publisher()
-
 def main(args):
   rospy.init_node('Robotiq3FGripperDemo', anonymous=True)
   gp = gripperdemo()
@@ -341,3 +349,4 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
+
