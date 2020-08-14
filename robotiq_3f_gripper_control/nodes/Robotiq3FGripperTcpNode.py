@@ -59,6 +59,7 @@ def mainLoop(address):
     gripper.client = robotiq_modbus_tcp.comModbusTcp.communication()
 
     # We connect to the address received as an argument
+    #default address is: 192.168.1.11
     gripper.client.connectToDevice(address)
 
     rospy.init_node('robotiq3FGripper')

@@ -76,24 +76,38 @@ class gripperdemo:
   
 
   def __init__(self):
-    
-    self.tolerance = 10000 #image pixel difference for the detected cirlce
+
+    self.filterwidth = 50
+    self.initcount = 0
+    self.tolerance = 200 #image pixel difference for the detected cirlce
+
     np.set_printoptions(suppress=True)
     print("program starts")
-    file = '2020-08-10-10_56_19 detected circle stats.csv'
+    file = '2020-08-14-15_56_49 detected circle stats.csv'
     filename = '/home/ubuntu20/catkin_ws/src/PerceptionVisulization/logs/' + file
     if not os.path.exists(filename):
       print("Program aborted! initialization file: %s does NOT exists!" % filename)
       sys.exit(0)
     data_load = np.loadtxt(filename,delimiter=",", skiprows=1)
-
+    
+    if data_load.ndim == 1:
+      data_load.resize((1,data_load.shape[0]))
+    
     self.historypixels = data_load[:,5]
+    
+    size = data_load.shape[0]
+    self.last_filterval = np.zeros([size,1])
+    self.current_filterval = np.zeros([size,1])
+    self.filterwindow = np.zeros([size,self.filterwidth])
+
+
     print("file name is ", file)
     print("is the initialization file correct? [Y/N]")
     if (input()=='Y'or'y'):
 
       print("data read from the initialization file is:")
       print(data_load)
+      print("data_load dim = ", data_load.ndim)
 
       # rospy.init_node('realtimeprocess_image_subscriber', anonymous=True)
       # self.pub = rospy.Publisher('fiber_index', IntList,queue_size=10)
@@ -148,10 +162,16 @@ class gripperdemo:
     ####calculate the most pixelvalue changes
     maxchange, index = self.calculatepixelvalue(stats_load, cv_image)
 
+    ##### do average filter here#########
+    # at the begining fill the filterwindow
+    if self.count<self.filterwidth:
+      pass
+
+
     if abs(maxchange) > self.tolerance:
       # print("gripper is reacting...")
       self.gripperaction()
-      rospy.sleep(1)
+      # rospy.sleep(1)
     
 
     # genCommand
@@ -159,6 +179,7 @@ class gripperdemo:
     row_num = stats_load.shape[0]
     stats_load = np.array(stats_load)
     diff = []
+    # if stats_load.ndim>1:
     for i, stat in enumerate(stats_load):
 
       centerx = stat[3]
@@ -178,9 +199,11 @@ class gripperdemo:
       diff.append(diff_current)
       # update history pixel value
       self.historypixels[i] = pixelvalue
-
+   
     max_index = diff.index(max(diff))  #return fiber index
-    max_value = max(diff)
+    max_value = abs(max(diff))
+
+
     print("max diff:", max_value)
 
     # print("fibers responsed are: %d and %d, intensity changes are: %d and %d"\
