@@ -79,11 +79,14 @@ class gripperdemo:
 
     self.filterwidth = 50
     self.initcount = 0
-    self.tolerance = 200 #image pixel difference for the detected cirlce
+    self.tolerance = 100 #image pixel difference for the detected cirlce
+    self.realcount = 0
+    self.activeflag = True
+    self.diff_last = np.zeros(2)
 
     np.set_printoptions(suppress=True)
     print("program starts")
-    file = '2020-08-14-15_56_49 detected circle stats.csv'
+    file = '2020-08-17-10_55_50 detected circle stats.csv'
     filename = '/home/ubuntu20/catkin_ws/src/PerceptionVisulization/logs/' + file
     if not os.path.exists(filename):
       print("Program aborted! initialization file: %s does NOT exists!" % filename)
@@ -96,8 +99,8 @@ class gripperdemo:
     self.historypixels = data_load[:,5]
     
     size = data_load.shape[0]
-    self.last_filterval = np.zeros([size,1])
-    self.current_filterval = np.zeros([size,1])
+    self.last_filterval = np.zeros(size,)
+    self.current_filterval = np.zeros(size)
     self.filterwindow = np.zeros([size,self.filterwidth])
 
 
@@ -107,7 +110,7 @@ class gripperdemo:
 
       print("data read from the initialization file is:")
       print(data_load)
-      print("data_load dim = ", data_load.ndim)
+      print("data_load dim = ", data_load.ndim)# 
 
       # rospy.init_node('realtimeprocess_image_subscriber', anonymous=True)
       # self.pub = rospy.Publisher('fiber_index', IntList,queue_size=10)
@@ -149,7 +152,8 @@ class gripperdemo:
 
     else:
       print("Program aborted! Please update filename in image_realtime_process_from_camera.py file")
-
+      rospy.signal_shutdown("Program aborted!")
+  
   def callback(self, data,args):
     stats_load = args
     # pub = args[1]
@@ -164,14 +168,49 @@ class gripperdemo:
 
     ##### do average filter here#########
     # at the begining fill the filterwindow
-    if self.count<self.filterwidth:
-      pass
+    if self.initcount<self.filterwidth:
+      for x in range(0,self.filterwindow.shape[0]):
+        self.filterwindow[x,self.initcount] = self.historypixels[x]
+      self.initcount = self.initcount+1
+      print("Filling initial filter pool.....num = ", self.initcount, '/',self.filterwidth)
+    else:
+      # do average for last round data:
+      self.last_filterval  = np.mean(self.filterwindow, axis=1)
+      
+      # print("filter window before updated: ",self.filterwindow)
+      # print("self.last_filterval", self.last_filterval)
 
+      self.filterwindow[:,:-1] = self.filterwindow[:,1:]
+      for x in range(0,self.filterwindow.shape[0]):
+        self.filterwindow[x,-1] = self.historypixels[x]
+      self.current_filterval = np.mean(self.filterwindow, axis=1)
+      
+      # print("filter window after updated: ",self.filterwindow)
+      # print("self.current_filterval", self.current_filterval)
 
-    if abs(maxchange) > self.tolerance:
-      # print("gripper is reacting...")
-      self.gripperaction()
-      # rospy.sleep(1)
+      diff = abs(self.current_filterval - self.last_filterval)
+      print("diff: ", diff)
+      self.diff_last[0] = self.diff_last[1]
+      self.diff_last[1] = diff
+
+    # if abs(maxchange) > self.tolerance:
+    if ('diff' in locals()) and (max(diff) > self.tolerance):
+      # self.realcount = self.realcount+1
+      # if self.realcount == 1:
+      #   print("gripper is reacting...")
+      #   self.gripperaction()
+      # elif self.realcount == self.filterwidth+1:
+      #   self.realcount = 0
+
+      if self.activeflag == True:
+        print("gripper is reacting...")
+        self.gripperaction()
+        self.activeflag = False
+      else: 
+        if abs(self.diff_last[0]-self.diff_last[1])>30:
+          self.activeflag = True
+
+      # rospy.sleep(0.01)
     
 
     # genCommand
@@ -204,7 +243,7 @@ class gripperdemo:
     max_value = abs(max(diff))
 
 
-    print("max diff:", max_value)
+    # print("max diff:", max_value)
 
     # print("fibers responsed are: %d and %d, intensity changes are: %d and %d"\
     #       %(max1_index+1, max2_index+1, max1_value, max2_value))
@@ -212,12 +251,12 @@ class gripperdemo:
 
   def gripperaction(self):
     # command = Robotiq3FGripperRobotOutput();
-    self.command.rFRA = 10  #grip force [0-255]
+    self.command.rFRA = 5  #grip force [0-255]
     self.command.rSPA = 255 #speed [0-255]
     self.command.rMOD = 0 #normal mode
     # get gripper status
     if self.gripperstatus == 0: #fully open
-      self.command.rPRA = 150  #position of the gripper [0-255], 0 for fully open, 255 for fully closed
+      self.command.rPRA = 140  #position of the gripper [0-255], 0 for fully open, 255 for fully closed
       self.gripperstatus = 1
     else: #grasping object
       self.command.rPRA = 0
@@ -225,7 +264,7 @@ class gripperdemo:
 
     self.pub.publish(self.command)
 
-    rospy.sleep(0.1) 
+    # rospy.sleep(0.1) 
 
   def genCommand(self, char, command):
       #Update the command according to the character entered by the user.
@@ -300,7 +339,7 @@ def askForCommand(command):
     currentCommand += ', rMOD = ' + str(command.rMOD)
     currentCommand += ', rGTO = ' + str(command.rGTO)
     currentCommand += ', rATR = ' + str(command.rATR)
-    ##    currentCommand += ', rGLV = ' + str(command.rGLV)
+    ##    currentCommand += ', rGLcountV = ' + str(command.rGLV)
     ##    currentCommand += ', rICF = ' + str(command.rICF)
     ##    currentCommand += ', rICS = ' + str(command.rICS)
     currentCommand += ', rPRA = ' + str(command.rPRA)
